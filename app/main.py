@@ -21,29 +21,46 @@ def sha256_hash_str(to_hash: str) -> str:
     return hashlib.sha256(to_hash.encode("utf-8")).hexdigest()
 
 
-def brute_force_range(start: int, end: int):
+def brute_force_range(start: int, end: int) -> list:
+    found = []
     for num in range(start, end):
         password_text = str(num).zfill(8)
         if sha256_hash_str(password_text) in PASSWORDS_TO_BRUTE_FORCE:
-            print(password_text)
+            found.append(password_text)
+    return found
 
 
-def brute_force_passwords():
+def brute_force_passwords() -> None:
     total_combinations = 100_000_000
-    parts = 10
+    workers_count = multiprocessing.cpu_count() - 1
+    parts = workers_count
     part_size = total_combinations // parts
 
-    with ProcessPoolExecutor(multiprocessing.cpu_count() - 1) as executor:
+    all_passwords = []
+
+    with ProcessPoolExecutor(workers_count) as executor:
         futures = []
 
         for i in range(parts):
             start = i * part_size
-            end = (i + 1) * part_size
+            end = total_combinations if i == parts - 1 else (i + 1) * part_size
 
             future = executor.submit(brute_force_range, start, end)
             futures.append(future)
 
         wait(futures)
+
+        for future in futures:
+            all_passwords.extend(future.result())
+
+    unique_passwords = list(set(all_passwords))
+
+    if len(unique_passwords) != 10:
+        raise ValueError("Validation failed: Wrong number of passwords!")
+
+    unique_passwords.sort()
+    for password in unique_passwords:
+        print(password)
 
 
 if __name__ == "__main__":
